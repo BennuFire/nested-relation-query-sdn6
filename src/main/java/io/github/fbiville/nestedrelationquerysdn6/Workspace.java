@@ -1,34 +1,41 @@
 package io.github.fbiville.nestedrelationquerysdn6;
 
 import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Property;
 import org.springframework.data.neo4j.core.schema.Relationship;
+import org.springframework.data.neo4j.core.schema.Relationship.Direction;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Node(primaryLabel = "Workspace")
 public class Workspace extends HypercubeNode {
 
-    @Property("STATE")
-    private String state;
+    
 
-    @Relationship(type = "WORKSPACE_IN")
-    private Map<Work, WorkspaceIn> workspaceIn = new HashMap<>();
+    @Relationship(direction = Direction.OUTGOING)
+    private Map<String, List<WorkspaceIn>> workspaceIn = new HashMap<>();
 
-    public String getState() {
-        return state;
-    }
-
-    public void setState(String state) {
-        this.state = state;
-    }
-
-    public Map<Work, WorkspaceIn> getWorkspaceIn() {
+    //Different Queries this Property exists
+    @Relationship(type = "WORKSPACE_IN", direction = Direction.OUTGOING) 
+    private List<Work> work = new ArrayList<>();
+    
+    public Map<String, List<WorkspaceIn>> getWorkspaceIn() {
         return workspaceIn;
     }
 
-    public void setWorkspaceIn(Map<Work, WorkspaceIn> workspaceIn) {
+    public void setWorkspaceIn(Map<String, List<WorkspaceIn>> workspaceIn) {
         this.workspaceIn = workspaceIn;
     }
+
+	public List<Work> getWork() {
+		return work;
+	}
+
+	public void setWork(List<Work> work) {
+		this.work = work;
+	} 
+    
+    
 }
