@@ -8,8 +8,7 @@ import org.springframework.data.neo4j.core.schema.Relationship.Direction;
 import java.util.ArrayList;
 import java.util.List;
 
-@Node(primaryLabel = "Changeset")
-public class Changeset extends HypercubeNode {
+public class ChangesetSimple extends HypercubeNode {
 
     @Property("USER")
     private String user;
@@ -21,7 +20,7 @@ public class Changeset extends HypercubeNode {
 		return changesetIns;
 	}
 
-	public void setChangesetIns(List<ChangesetIn> changesetIns) {
+	public void setWorkspaces(List<ChangesetIn> changesetIns) {
 		this.changesetIns = changesetIns;
 	}
 

@@ -2,6 +2,7 @@ package io.github.fbiville.nestedrelationquerysdn6;
 
 import org.assertj.core.util.Maps;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
@@ -24,29 +25,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
 @DataNeo4jTest
-@TestInstance(Lifecycle.PER_CLASS)
 class NestedRelationQuerySdn6ApplicationTests {
 
     @Autowired
     private Driver driver;
 
-    //@Container
-    //private static final Neo4jContainer<?> neo4jContainer = new Neo4jContainer<>("neo4j:4.0");
+    @Container
+    private static final Neo4jContainer<?> neo4jContainer = new Neo4jContainer<>("neo4j:4.0");
 
     @DynamicPropertySource
     static void neo4jProperties(DynamicPropertyRegistry registry) {
-        //registry.add("spring.neo4j.uri", neo4jContainer::getBoltUrl);
-        registry.add("spring.neo4j.uri", () -> "bolt://localhost:7687");
-        //registry.add("spring.neo4j.authentication.username", () -> "neo4j");
-        //registry.add("spring.neo4j.authentication.password", neo4jContainer::getAdminPassword);
+        registry.add("spring.neo4j.uri", neo4jContainer::getBoltUrl);
+        registry.add("spring.neo4j.authentication.username", () -> "neo4j");
+        registry.add("spring.neo4j.authentication.password", neo4jContainer::getAdminPassword);
     }
 
-    @BeforeAll
+    @BeforeEach
     void prepare(@Autowired ChangesetRepository repository) {
         try (Session session = driver.session()) {
             session.writeTransaction(tx -> {
                 tx.run("MATCH (n) DETACH DELETE n");
-                //tx.run("CREATE (:Workspace:Hypercube {STATE: 'some-xxx', ID : 1 , CANCELED : false})<-[:CHANGESET_IN {VALID : true}]-(:Changeset:Hypercube {USER: 'some-user', ID: 1, CANCELED : false})-[:CHANGESET_IN {VALID : true}]->(ws:Workspace:Hypercube {STATE: 'some-state', ID : 1 , CANCELED : false}), " +
                 tx.run("CREATE (:Changeset:Hypercube {USER: 'some-user', ID : 1, CANCELED : false})-[:CHANGESET_IN {VALID : true}]->(ws:Workspace:Hypercube {STATE: 'some-state', ID : 1 , CANCELED : false}), " +
                         "     (ws)-[:WORKSPACE_IN]->(:Hypercube:Work {STATE: 'some-other-state', ID : 1 , CANCELED : false})");
                 return null;
@@ -54,8 +52,8 @@ class NestedRelationQuerySdn6ApplicationTests {
         }
     }
 
-    @Test
-    void finds_changeset_by_id_rels_rels(@Autowired ChangesetRepository repository) {
+    //@Test
+    void finds_non_canceled_changeset_by_id(@Autowired ChangesetRepository repository) {
         Long changesetId = findChangesetId("some-user");
 
         Optional<Changeset> result = repository.findByIdAndCanceledFalse(changesetId);
@@ -63,80 +61,31 @@ class NestedRelationQuerySdn6ApplicationTests {
         assertThat(result).hasValueSatisfying((changeset) -> {
             assertThat(changeset.getId()).isEqualTo(changesetId);
             assertThat(changeset.getUser()).isEqualTo("some-user");
-            Map<String, List<ChangesetIn>> changesetRels = changeset.getChangesetIn();
-            assertThat(changesetRels).hasSize(1);
-            String key = changesetRels.keySet().iterator().next();
-            Workspace workspace = (Workspace) changesetRels.get(key).get(0).getWorkspace();
+            List<ChangesetIn> changesetIns = changeset.getChangesetIns();
+            assertThat(changesetIns).overridingErrorMessage("Expecting 1 changeset_in").hasSize(1);
+            Workspace workspace = changesetIns.iterator().next().getWorkspace();
             assertThat(workspace.getState()).isEqualTo("some-state");
-            Map<String, List<WorkspaceIn>> workspaceRels = workspace.getWorkspaceIn();
-            assertThat(workspaceRels).hasSize(1);
-            key = workspaceRels.keySet().iterator().next();
-            Work work = (Work) workspaceRels.get(key).get(0).getWork();
+            List<WorkspaceIn> workspaceIns = workspace.getWorkspaceIns();
+            assertThat(workspaceIns).overridingErrorMessage("Expecting 1 workspace_in").hasSize(1);
+            Work work = workspaceIns.iterator().next().getWork();
             assertThat(work.getState()).isEqualTo("some-other-state");
-        }); 
+        });
     }
     
     @Test
-    void finds_changeset_by_id_rels_list(@Autowired ChangesetRepository repository) {
+    void test_projection(@Autowired ChangesetRepository repository) {
         Long changesetId = findChangesetId("some-user");
 
-        Optional<Changeset> result = repository.findByIdAndCanceledFalse(changesetId);
-
-        assertThat(result).hasValueSatisfying((changeset) -> {
-        	assertThat(changeset.getId()).isEqualTo(changesetId);
-            assertThat(changeset.getUser()).isEqualTo("some-user");
-            Map<String, List<ChangesetIn>> changesetRels = changeset.getChangesetIn();
-            assertThat(changesetRels).hasSize(1);
-            String key = changesetRels.keySet().iterator().next();
-            Workspace workspace = (Workspace) changesetRels.get(key).get(0).getWorkspace();
-            assertThat(workspace.getState()).isEqualTo("some-state");
-            List<Work> works = workspace.getWork();
-            assertThat(works).hasSize(1);
-            Work work = works.get(0);
-            assertThat(work.getState()).isEqualTo("some-other-state");
-        }); 
-    }
-
-    @Test
-    void finds_changeset_by_id_list_rels(@Autowired ChangesetRepository repository) {
-        Long changesetId = findChangesetId("some-user");
-
-        Optional<Changeset> result = repository.findByIdAndCanceledFalse(changesetId);
-
-        assertThat(result).hasValueSatisfying((changeset) -> {
-        	assertThat(changeset.getId()).isEqualTo(changesetId);
-            assertThat(changeset.getUser()).isEqualTo("some-user");
-            List<Workspace> workspaces = changeset.getWorkspace();
-            assertThat(workspaces).hasSize(1);
-            Workspace workspace = workspaces.get(0);
-            assertThat(workspace.getState()).isEqualTo("some-state");
-            Map<String, List<WorkspaceIn>> workspaceRels = workspace.getWorkspaceIn();
-            assertThat(workspaceRels).hasSize(1);
-            String key = workspaceRels.keySet().iterator().next();
-            Work work = (Work) workspaceRels.get(key).get(0).getWork();
-            assertThat(work.getState()).isEqualTo("some-other-state");
-        }); 
+      //  Optional<ChangesetExtended> result = repository.findExtended(changesetId);
+        
+        Optional<ChangesetExtendedDTO> result = repository.findExtendedDTO(changesetId);
+        assertThat(result).hasValueSatisfying((changesetExtended) -> {
+            assertThat(changesetExtended.getCc()).isEqualTo("1");
+            assertThat(changesetExtended.getChangeset().getUser()).isEqualTo("some-user");
+        });
     }
     
-    @Test
-    void finds_changeset_by_id_list_list(@Autowired ChangesetRepository repository) {
-        Long changesetId = findChangesetId("some-user");
-
-        Optional<Changeset> result = repository.findByIdAndCanceledFalse(changesetId);
-
-        assertThat(result).hasValueSatisfying((changeset) -> {
-            assertThat(changeset.getId()).isEqualTo(changesetId);
-            assertThat(changeset.getUser()).isEqualTo("some-user");
-            List<Workspace> workspaces = changeset.getWorkspace();
-            assertThat(workspaces).hasSize(1);
-            Workspace workspace = workspaces.get(0);
-            assertThat(workspace.getState()).isEqualTo("some-state");
-            List<Work> works = workspace.getWork();
-            assertThat(works).hasSize(1);
-            Work work = works.get(0);
-            assertThat(work.getState()).isEqualTo("some-other-state");
-        }); 
-    }
+    
 
     private Long findChangesetId(String user) {
         try (Session session = driver.session()) {
